@@ -5,17 +5,11 @@ import json
 from common.rabbitmq import RabbitMQ
 from common.models import Bid, Message
 from common import config
-from common.crypto_utils import generate_keys, sign, get_public_key_pem
 
 class AuctionClient:
     def __init__(self):
         self.user_id = str(uuid.uuid4())
-        self.private_key, self.public_key = generate_keys()
         self.known_auctions = {}
-
-        # Salva a chave pública em um arquivo para o MSBid usar
-        with open(f"keys/{self.user_id}_public_key.pem", "wb") as f:
-            f.write(get_public_key_pem(self.public_key))
 
     def listen_for_auctions(self):
         """Listen to 'leilao_iniciado' and 'leilao_finalizado' events in a dedicated thread."""
@@ -94,12 +88,10 @@ class AuctionClient:
             print("Erro: Leilão desconhecido.")
             return
         message_to_sign = f"{auction_id}{self.user_id}{amount:.2f}"
-        signature = sign(self.private_key, message_to_sign)
         bid = Bid(
             auction_id=auction_id,
             user_id=self.user_id,
             amount=amount,
-            signature=signature
         )
         message = Message(event_type="lance_realizado", payload=bid.to_dict())
         RabbitMQ().publish(

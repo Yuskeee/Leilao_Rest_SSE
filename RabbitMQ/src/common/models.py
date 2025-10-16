@@ -23,7 +23,6 @@ class Bid:
     auction_id: int
     user_id: str
     amount: float
-    signature: str  # digital signature of the bid
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert the Bid object into a dictionary (JSON serializable)."""
