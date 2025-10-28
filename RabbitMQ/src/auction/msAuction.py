@@ -4,6 +4,27 @@ from datetime import datetime, timedelta
 from common.rabbitmq import RabbitMQ
 from common.models import Auction, Message
 from common import config
+from flask import Flask, request, jsonify
+
+app = Flask(__name__)
+
+@app.route('/api/leiloes', methods=['GET'])
+def get_leiloes_abertos():
+    leiloes_ativos = [auction.to_dict() for auction in auctions if auction.status == "active"]
+    return jsonify(leiloes_ativos)
+
+@app.route('/api/leiloes', methods=['POST'])
+def criar_leilao():
+    data = request.json
+    novo_leilao = Auction(
+        id=data['id'],
+        description=data['description'],
+        start_time=datetime.fromisoformat(data['start_time']),
+        end_time=datetime.fromisoformat(data['end_time']),
+        status="pending"
+    )
+    auctions.append(novo_leilao)
+    return jsonify({"message": "Leilão criado", "leilao": novo_leilao.to_dict()}), 201
 
 # Lista pré-configurada de leilões
 auctions = [
@@ -66,4 +87,5 @@ def main():
         print("\nMicrosserviço de Leilão encerrado.")
 
 if __name__ == '__main__':
+    app.run(port=5001)
     main()
