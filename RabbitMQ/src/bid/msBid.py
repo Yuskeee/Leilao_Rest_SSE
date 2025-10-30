@@ -7,11 +7,52 @@ from common.rabbitmq import RabbitMQ
 from common.models import Bid, Message
 from common import config
 
+from flask import Flask, request, jsonify
+
 class MSBid:
     def __init__(self):
         self.rabbitmq = RabbitMQ()
         self.highest_bids = {}
         self.auction_status = {}
+        self.app = Flask(__name__)
+        self._setup_routes()
+
+    def _setup_routes(self):
+        @self.app.route('/api/lance', methods=['POST'])
+        def efetuar_lance():
+            try:
+                data = request.json
+                auction_id = data['auction_id']
+                user_id = data['user_id']
+                amount = data['amount']
+                
+                # Publica o evento lance_realizado no RabbitMQ
+                message = Message(
+                    event_type="lance_realizado",
+                    payload={
+                        "auction_id": auction_id,
+                        "user_id": user_id,
+                        "amount": amount
+                    }
+                )
+                self.rabbitmq.publish(
+                    exchange=config.EXCHANGE_NAME,
+                    routing_key="lance_realizado",
+                    body=message.to_dict()
+                )
+                
+                return jsonify({"message": "Lance recebido e processando"}), 202
+            except KeyError as e:
+                return jsonify({"error": f"Campo obrigatório ausente: {str(e)}"}), 400
+            except Exception as e:
+                return jsonify({"error": str(e)}), 500
+
+    def start_api(self):
+        def _start():
+            self.app.run(host='0.0.0.0', port=5002, debug=False)
+        t = threading.Thread(target=_start, daemon=True)
+        t.start()
+
 
     def listen(self):
         def _listen():
@@ -116,6 +157,7 @@ class MSBid:
 if __name__ == "__main__":
     msbid = MSBid()
     msbid.listen()
+    msbid.start_api() 
     print("[MSBid] MSBid service started and listening for events.\nPress Ctrl+C to exit.")
     while True:
         time.sleep(1)
