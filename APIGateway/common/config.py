@@ -1,2 +1,2 @@
-RABBITMQ_HOST = 'localhost'
+RABBITMQ_HOST = 'rabbitmq'
 EXCHANGE_NAME = 'leilao_exchange'

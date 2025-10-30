@@ -8,4 +8,4 @@ COPY sse.py /app/
 
 RUN pip install pika flask flask_sse flask-cors redis gunicorn
 
-CMD ["python", "-u", "notification/notification.py"]
+CMD ["python", "-u", "-m", "notification.notification"]

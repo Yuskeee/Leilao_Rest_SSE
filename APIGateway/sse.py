@@ -6,7 +6,7 @@ import os
 
 app = Flask(__name__)
 CORS(app)
-app.config["REDIS_URL"] = os.environ.get("REDIS_URL", "redis://localhost")
+app.config["REDIS_URL"] = os.environ.get("REDIS_URL", "redis://localhost:6379")
 app.register_blueprint(sse, url_prefix='/events')
 
 class SSE:

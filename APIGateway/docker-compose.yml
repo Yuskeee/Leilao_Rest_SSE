@@ -17,15 +17,22 @@ services:
       context: .
       dockerfile: notification/Dockerfile
     depends_on:
-      - rabbitmq
+      rabbitmq:
+        condition: service_healthy
     environment:
       - RABBITMQ_HOST=rabbitmq
+      - REDIS_URL=redis://redis:6379
 
   rabbitmq:
-    image: "rabbitmq:3-management"
+    image: rabbitmq:3-management
     ports:
       - "5672:5672"
       - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "status"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
 
   redis:
     image: "redis:alpine"
