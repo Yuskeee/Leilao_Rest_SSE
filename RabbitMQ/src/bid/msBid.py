@@ -18,7 +18,7 @@ class MSBid:
         def _listen():
             self.rabbitmq.declare_exchange(config.EXCHANGE_NAME, ex_type="direct")
             queue_name = self.rabbitmq.declare_queue("", exclusive=True)
-            for routing_key in ["lance_realizado", "leilao_iniciado", "leilao_finalizado"]:
+            for routing_key in ["leilao_iniciado", "leilao_finalizado"]:
                 self.rabbitmq.bind_queue(queue=queue_name, exchange=config.EXCHANGE_NAME, routing_key=routing_key)
             self.rabbitmq.consume(queue=queue_name, callback=self.handle_event)
         t = threading.Thread(target=_listen, daemon=True)
@@ -28,9 +28,7 @@ class MSBid:
         try:
             data = json.loads(body.decode())
             event_type = method.routing_key
-            if event_type == "lance_realizado":
-                self.process_bid(data.get('payload'))
-            elif event_type == "leilao_iniciado":
+            if event_type == "leilao_iniciado":
                 self.process_auction_started(data.get('payload'))
             elif event_type == "leilao_finalizado":
                 self.process_auction_closed(data.get('payload'))
@@ -57,7 +55,7 @@ class MSBid:
                     "winner_id": winner_info['user_id'],
                     "value": winner_info['amount']
                 })
-                self.rabbitmq.publish(exchange=config.EXCHANGE_NAME, routing_key="leilao_vencedor", body=message.to_dict())
+                RabbitMQ().publish(exchange=config.EXCHANGE_NAME, routing_key="leilao_vencedor", body=message.to_dict())
                 print(f"[MSBid] Auction {auction_id} closed! Winner: {winner_info['user_id'][:8]}..., Value: {winner_info['amount']:.2f}")
             else:
                 print(f"[MSBid] Auction {auction_id} closed. No valid bids.")
@@ -67,7 +65,7 @@ class MSBid:
     def process_bid(self, bid_data):
         try:
             user_id = bid_data['user_id']
-            auction_id = bid_data['auction_id']
+            auction_id = int(bid_data['auction_id'])
             amount = bid_data['amount']
             print(f"[MSBid] Bid received: user {user_id[:8]}..., auction {auction_id}, value {amount:.2f}")
             # 1. Auction must exist and be active
@@ -83,7 +81,7 @@ class MSBid:
                     "user_id": user_id,
                     "amount": amount
                 })
-                self.rabbitmq.publish(exchange=config.EXCHANGE_NAME, routing_key="lance_invalidado", body=message.to_dict())
+                RabbitMQ().publish(exchange=config.EXCHANGE_NAME, routing_key="lance_invalidado", body=message.to_dict())
                 print(f"[MSBid] Ignored bid for auction {auction_id}: {amount:.2f} by user {user_id[:8]}...")
                 return
             # Accept bid
@@ -94,7 +92,7 @@ class MSBid:
                 "user_id": user_id,
                 "amount": amount
             })
-            self.rabbitmq.publish(exchange=config.EXCHANGE_NAME, routing_key="lance_validado", body=message.to_dict())
+            RabbitMQ().publish(exchange=config.EXCHANGE_NAME, routing_key="lance_validado", body=message.to_dict())
             print(f"[MSBid] New highest bid for auction {auction_id}: {amount:.2f} by user {user_id[:8]}...")
         except Exception as e:
             print(f"[MSBid] Error processing bid: {e}")
@@ -104,11 +102,15 @@ msbid.listen()
 
 @app.route('/api/bid', methods=['POST'])
 def place_bid():
-    data = request.json
-    bid = Bid(auction_id=data['auction_id'], user_id=data['user_id'], amount=data['amount'])
-    message = Message(event_type="lance_realizado", payload=bid.to_dict())
-    msbid.rabbitmq.publish(exchange=config.EXCHANGE_NAME, routing_key="lance_realizado", body=message.to_dict())
-    return jsonify({"message": "Bid placed!"}), 202
+    try:
+        data = request.json
+        bid = Bid(auction_id=data['auction_id'], user_id=data['user_id'], amount=data['amount'])
+        msbid.process_bid(bid.to_dict())
+        return jsonify({"message": "Bid placed!"}), 202
+    except Exception as e:
+        import traceback
+        print("Bid error:", traceback.format_exc())
+        return jsonify({"error": f"Failed to place bid: {str(e)}"}), 400
 
 if __name__ == "__main__":
     print("[MSBid] MSBid service started and listening for events.\nPress Ctrl+C to exit.")

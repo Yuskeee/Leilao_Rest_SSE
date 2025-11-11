@@ -29,7 +29,7 @@ def create_payment():
     transaction_id = str(uuid.uuid4())
     
     # Cria o link de pagamento simulado
-    payment_link = f"http://localhost:5001/payment/{transaction_id}"
+    payment_link = f"http://localhost:5006/payment/{transaction_id}"
     
     # Armazena transação
     transactions[transaction_id] = {
@@ -158,5 +158,5 @@ def send_webhook(webhook_url, transaction_id, status, transaction):
 
 
 if __name__ == '__main__':
-    print("[Sistema Pagamento Externo] Iniciando na porta 5001...")
-    app.run(debug=True, port=5001, host='0.0.0.0')
+    print("[Sistema Pagamento Externo] Iniciando na porta 5006...")
+    app.run(debug=True, port=5006, host='0.0.0.0')

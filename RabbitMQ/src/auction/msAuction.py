@@ -8,7 +8,6 @@ from common import config
 
 app = Flask(__name__)
 
-# Pre-configured auction list
 auctions = [
     # Auction(
     #     id=1,

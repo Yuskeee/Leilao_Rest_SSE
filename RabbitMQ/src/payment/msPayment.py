@@ -9,7 +9,7 @@ from common import config
 class MSPayment:
     def __init__(self):
         self.rabbitmq = RabbitMQ()
-        self.external_payment_url = "http://localhost:5001/api/payment/create"
+        self.external_payment_url = "http://localhost:5006/api/payment/create"
         self.webhook_url = "http://localhost:5003/webhook/payment"
 
     def listen(self):
@@ -34,7 +34,6 @@ class MSPayment:
             print(f"[MSPayment] Error processing event: {e}")
 
     def process_auction_winner(self, payload):
-        # Prepara dados para requisição REST ao sistema externo de pagamento
         try:
             payment_payload = {
                 "value": payload["value"],
@@ -56,19 +55,18 @@ class MSPayment:
                         "status": "created"
                     }
                 )
-                self.rabbitmq.publish(
+                RabbitMQ().publish(
                     exchange=config.EXCHANGE_NAME,
                     routing_key="link_pagamento",
                     body=message.to_dict()
                 )
-                print(f"[MSPayment] Payment link published for auction {payload['auction_id']}.")
+                print(f"[MSPayment] Payment link ({data['payment_link']}) published for auction {payload['auction_id']}.")
             else:
                 print(f"[MSPayment] Failed to create payment: {response.text}")
         except Exception as e:
             print(f"[MSPayment] Error at process_auction_winner: {e}")
 
     def webhook_server(self):
-        # Flask app that listens for webhook notifications from payment external system
         from flask import Flask, request, jsonify
         app = Flask(__name__)
 
@@ -95,7 +93,7 @@ class MSPayment:
                     "value": value
                 }
             )
-            self.rabbitmq.publish(
+            RabbitMQ().publish(
                 exchange=config.EXCHANGE_NAME,
                 routing_key="status_pagamento",
                 body=message.to_dict()
@@ -109,7 +107,7 @@ if __name__ == "__main__":
     mspayment = MSPayment()
     mspayment.listen()
     print("[MSPayment] MSPayment service started and listening for events. Press Ctrl+C to exit.")
-    # Inicia Flask webhook listener no main thread
+
     mspayment.webhook_server()
     while True:
         time.sleep(1)
