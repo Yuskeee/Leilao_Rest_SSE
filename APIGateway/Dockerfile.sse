@@ -1,10 +1,11 @@
+# Dockerfile.sse
 FROM python:3.9-slim
 
 WORKDIR /app
 
-COPY * .
+COPY . /app
 
-RUN pip install Flask flask_sse APScheduler flask-cors redis gunicorn
+RUN pip install Flask flask_sse flask-cors redis gunicorn
 
 EXPOSE 5000
 

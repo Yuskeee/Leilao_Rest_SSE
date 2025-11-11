@@ -1,28 +1,6 @@
 version: '3'
 
 services:
-  sse:
-    build: .
-    ports:
-      - "5000:5000"
-    depends_on:
-      - redis
-      - rabbitmq
-    environment:
-      - REDIS_URL=redis://redis:6379
-      - RABBITMQ_HOST=rabbitmq
-
-  notification:
-    build:
-      context: .
-      dockerfile: notification/Dockerfile
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-    environment:
-      - RABBITMQ_HOST=rabbitmq
-      - REDIS_URL=redis://redis:6379
-
   rabbitmq:
     image: rabbitmq:3-management
     ports:
@@ -36,3 +14,46 @@ services:
 
   redis:
     image: "redis:alpine"
+    ports:
+      - "6379:6379"
+
+  api_gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile.api_gateway
+    ports:
+      - "8000:8000"
+    depends_on:
+      - rabbitmq
+      - redis
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - REDIS_URL=redis://redis:6379
+
+  sse:
+    build:
+      context: .
+      dockerfile: Dockerfile.sse
+    ports:
+      - "5000:5000"
+    depends_on:
+      - rabbitmq
+      - redis
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - REDIS_URL=redis://redis:6379
+
+  notification:
+    build:
+      context: .
+      dockerfile: Dockerfile.notification
+    ports:
+      - "5001:5001"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - REDIS_URL=redis://redis:6379
