@@ -28,7 +28,10 @@ class EventManager: ObservableObject {
     // --- Propriedades de Estado ---
     
     @Published var apiMessage: String = ""
-    @Published var connectionStatus: String = "Disconnected"
+    var lastApiMessage: String?
+    @Published var connectionStatus: String = ""
+    
+    @Published var registeredAuctions: Set<Int> = []
     
     // Payloads de eventos SSE
     @Published var lastError: BidErrorPayload?
@@ -93,6 +96,7 @@ class EventManager: ObservableObject {
     func disconnectSSE() {
         self.sseTask?.cancel()
         self.eventSource = nil
+        self.registeredAuctions.removeAll()
         self.connectionStatus = "Disconnected"
         print("SSE disconnected")
     }
@@ -103,7 +107,12 @@ class EventManager: ObservableObject {
             return
         }
         
+        
         print("🔔 Received named event: '\(eventName)', data: \(eventDataString)")
+        
+        if eventName != "keepalive" && eventName != "bid_error" {
+                self.lastError = nil
+            }
         
         let decoder = JSONDecoder()
         
@@ -114,6 +123,14 @@ class EventManager: ObservableObject {
         
         do {
             // Decodifica com base no eventName
+            if (lastApiMessage != apiMessage){
+                lastError = nil
+                lastBid = nil
+                paymentInfo = nil
+                
+                lastApiMessage = apiMessage
+            }
+            
             switch eventName {
                 
             case "bid_update":
@@ -122,12 +139,14 @@ class EventManager: ObservableObject {
                 // 2. Extrai o payload interno
                 self.lastBid = wrapper.payload
                 self.apiMessage = "New bid: \(self.lastBid?.amount ?? 0) by \(self.lastBid?.user_id ?? "unknown")"
+                self.lastError = nil
                 
             case "bid_error":
                 let wrapper = try decoder.decode(EventWrapper<BidErrorPayload>.self, from: data)
                 self.lastError = wrapper.payload
                 // Agora "reason" pode ser nil
                 self.apiMessage = "Bid Error: \(self.lastError?.reason ?? "Invalid bid")"
+                self.lastBid = nil
                 
             case "auction_end":
                 let wrapper = try decoder.decode(EventWrapper<AuctionEndPayload>.self, from: data)
@@ -137,6 +156,8 @@ class EventManager: ObservableObject {
                 } else {
                     self.apiMessage = "Auction \(String(self.auctionResult!.auction_id) ?? "") ended. Winner: \(self.auctionResult?.winner_id ?? "N/A")"
                 }
+                self.lastBid = nil
+                self.lastError = nil
                 
             case "payment_info":
                 let wrapper = try decoder.decode(EventWrapper<PaymentInfoPayload>.self, from: data)
@@ -146,6 +167,8 @@ class EventManager: ObservableObject {
                     NSWorkspace.shared.open(url)
                     print("Payment URL: \(url.absoluteString)")
                 }
+                self.lastBid = nil
+                self.lastError = nil
                 
             case "payment_status":
                 let wrapper = try decoder.decode(EventWrapper<PaymentStatusPayload>.self, from: data)
@@ -155,6 +178,8 @@ class EventManager: ObservableObject {
                 } else {
                     self.apiMessage = "Payment Error: \(self.paymentStatus?.reason ?? "Failed")"
                 }
+                self.lastBid = nil
+                self.lastError = nil
                 
             case "keepalive":
                 print("💓 Connection alive")
@@ -210,7 +235,6 @@ class EventManager: ObservableObject {
         let end_time: String   // ISO
     }
 
-    // REST API: Register Interest
     func registerInterest(userId: String, auctionId: String) async {
         guard !userId.isEmpty, !auctionId.isEmpty else { return }
         guard let url = URL(string: "\(baseURL)/api/interest") else { return }
@@ -219,6 +243,10 @@ class EventManager: ObservableObject {
         do {
             let result = try await performRequest(url: url, method: "POST", payload: payload)
             self.apiMessage = "Register: \(result)"
+            
+            if let id = Int(auctionId) {
+                            self.registeredAuctions.insert(id)
+                        }
         } catch {
             self.apiMessage = "Register Error: \(error.localizedDescription)"
         }
@@ -233,6 +261,10 @@ class EventManager: ObservableObject {
         do {
             let result = try await performRequest(url: url, method: "DELETE", payload: payload)
             self.apiMessage = "Cancel: \(result)"
+            
+            if let id = Int(auctionId) {
+                           self.registeredAuctions.remove(id)
+                       }
         } catch {
             self.apiMessage = "Cancel Error: \(error.localizedDescription)"
         }
@@ -280,3 +312,4 @@ class EventManager: ObservableObject {
         }
     }
 }
+
